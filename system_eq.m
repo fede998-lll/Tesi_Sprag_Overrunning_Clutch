@@ -43,7 +43,7 @@ function dYdt = system_eq(t, Y, I_1, I_4, I_BI, I_BE, I_G, m_G, nbg, Cm_max, tv,
     end
 
     % Calculate torques for the input and output sides
-    % Ce_BI = K1 * (theta(1) - theta(2)) + C1 * (omega(1) - omega(2)); % Torque on the inner race
+    Ce_BI = K1 * (theta(1) - theta(2)) + C1 * (omega(1) - omega(2)); % Torque on the inner race
     Ce_BE = -(K2 * (theta(3) - theta(4)) + C2 * (omega(3) - omega(4))); % Torque on the outer race
 
     % Derivatives of angular positions are equal to angular velocities
