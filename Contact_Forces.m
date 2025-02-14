@@ -1,6 +1,7 @@
-function [NBI, geom] = computing_NBI(C, nbg, R_e, R_i, R_ge, R_gi, a)
+function [TBI, TBE, NBI, geom] = Contact_Forces(C, state, ClutchPar, ShaftPar, omega)
+    global geom %input
     % computing_NBI - Computes the normal force (NBI) and geometric parameters for the clutch system.
-    %
+    %C, nbg, R_e, R_i, R_ge, R_gi, a
     % Inputs:
     %   C    - Input torque [Nm]
     %   nbg  - Number of sprags
@@ -21,38 +22,63 @@ function [NBI, geom] = computing_NBI(C, nbg, R_e, R_i, R_ge, R_gi, a)
     %          - h   : Height of the triangle formed by the sprag [m]
     %          - b   : Base length of the triangle [m]
 
-    % Constants and stiffness values
-    Cst = 1.57e-10;     % Hertzian contact constant
-    l   = 6e-3;         % Contact length [m]
-    KBI = 3e8;          % Stiffness of the inner race [N/m]
-    KBE = 1.7308e8;     % Stiffness of the outer race [N/m]
-    Kg  = 7.5e8;        % Stiffness of the sprag [N/m]
+    R_i = ClutchPar.R_i; R_e = ClutchPar.R_e  ; R_gi = ClutchPar.R_gi ; R_ge = ClutchPar.R_ge; a = ClutchPar.a ; nbg = ClutchPar.nbg;
+    Cst = ClutchPar.Cst ; % Constant
+    l = ClutchPar.length ;       % Contact length
+    KBI_R = ShaftPar.KBI_R;      % Inner race stiffness
+    KBE_R = ShaftPar.KBE_R;  % Outer race stiffness
+    Kg = ClutchPar.Kg ;     % Sprag stiffness
+    if state ~= 'STATE2'
+        if state == 'STATE1'
+            x0 = NBI0;
+        else
+            x0 = [TBI0; NBI0];
+        end
+        fun = @(x) Static_Equilibrium(x, ShaftPar, ClutchPar, state);
+        [Sol,~,~,~,~] = fsolve(fun,x0,options);
+        if state == 'STATE1'
+            NBI = Sol;        
+            if omega(2) - omega(3) < -1e-1
+                TBI = +NBI * ClutchPar.mu_k;
+            else
+                TBI = -NBI * ClutchPar.mu_k;
+            end
+            TBE = - cos(geom.beta)*TBI;
+        else
+            TBI = Sol(1,1); NBI = Sol(2,1);
+            TBE = -(R_i - geom.d_BI - geom.d_H / 2)*TBI/(R_e + geom.d_BE + geom.d_H / 2);
+        end
 
+    end
+
+
+    if state == 'STATE2'
     % Define the function to find the root of
-    f = @(NBI) calcDiff(NBI, C, nbg, R_e, R_i, R_ge, R_gi, a, Cst, l, KBI, KBE, Kg);
-
-    % Initial guess range for fzero
-    min = 0;            % Minimum guess for NBI
-    max = 7e4;          % Maximum guess for NBI
-
-    % Solve for NBI using fzero
-    NBI = fzero(f, [min, max]);
-
-    % Compute geometric parameters based on NBI
-    geom.d_BI = NBI / KBI;                                    % Deformation of the inner race
-    geom.d_BE = NBI / KBE;                                    % Deformation of the outer race
-    geom.d_H  = Cst * ((NBI^0.9) / (l^0.8));                  % Hertzian deformation
-    geom.d_g  = NBI / Kg;                                     % Deformation of the sprag
-
-    % Compute distances for geometry
-    OA  = R_i - geom.d_BI - geom.d_H / 2;                     
-    OCi = R_i + R_gi - geom.d_BI - geom.d_g + geom.d_H;       
-    OCe = R_e - R_ge + geom.d_BE + geom.d_g + geom.d_H;       
-
-    % Calculate geometric parameters beta, h, and b
-    geom.beta = acos((OCi^2 + OCe^2 - a^2) / (2 * OCi * OCe)); 
-    geom.h    = OCe * sin(geom.beta);                         
-    geom.b    = OCe * cos(geom.beta) - OA;                    
+        f = @(NBI) calcDiff(NBI, C, ClutchPar, ShaftPar);
+    
+        % Initial guess range for fzero
+        min = 0;            % Minimum guess for NBI
+        max = 7e4;          % Maximum guess for NBI
+    
+        % Solve for NBI using fzero
+        NBI = fzero(f, [min, max]);
+    
+        % Compute geometric parameters based on NBI
+        geom.d_BI = NBI / KBI;                                    % Deformation of the inner race
+        geom.d_BE = NBI / KBE;                                    % Deformation of the outer race
+        geom.d_H  = Cst * ((NBI^0.9) / (l^0.8));                  % Hertzian deformation
+        geom.d_g  = NBI / Kg;                                     % Deformation of the sprag
+    
+        % Compute distances for geometry
+        OA  = R_i - geom.d_BI - geom.d_H / 2;                     
+        OCi = R_i + R_gi - geom.d_BI - geom.d_g + geom.d_H;       
+        OCe = R_e - R_ge + geom.d_BE + geom.d_g + geom.d_H;       
+    
+        % Calculate geometric parameters beta, h, and b
+        geom.beta = acos((OCi^2 + OCe^2 - a^2) / (2 * OCi * OCe)); 
+        geom.h    = OCe * sin(geom.beta);                         
+        geom.b    = OCe * cos(geom.beta) - OA;   
+    end
 end
 
 %---------------------------------------
